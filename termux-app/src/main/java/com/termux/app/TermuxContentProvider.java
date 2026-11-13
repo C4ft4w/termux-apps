@@ -64,38 +64,27 @@ public class TermuxContentProvider extends ContentProvider {
         Object[] row = new Object[projection.length];
         for (int i = 0; i < projection.length; i++) {
             String column = projection[i];
-            Object value;
-            switch (column) {
-                case MediaStore.MediaColumns.DISPLAY_NAME:
-                    value = file.getName();
-                    break;
-                case TERMUX_PATH_COLUMN_NAME:
-                    value = file.getAbsolutePath();
-                    break;
-                case MediaStore.MediaColumns.SIZE:
-                    value = (int) file.length();
-                    break;
-                case MediaStore.MediaColumns._ID:
-                    value = 1;
-                    break;
-                default:
-                    value = null;
-            }
-            row[i] = value;
+            row[i] = switch (column) {
+                case MediaStore.MediaColumns.DISPLAY_NAME -> file.getName();
+                case TERMUX_PATH_COLUMN_NAME -> file.getAbsolutePath();
+                case MediaStore.MediaColumns.SIZE -> (int) file.length();
+                case MediaStore.MediaColumns._ID -> 1;
+                default -> null;
+            };
         }
         cursor.addRow(row);
     }
 
     @Override
     public String getType(@NonNull Uri uri) {
-        String path = uri.getLastPathSegment();
-        if (path != null) {
-            int extIndex = path.lastIndexOf('.') + 1;
-            if (extIndex > 0) {
-                MimeTypeMap mimeMap = MimeTypeMap.getSingleton();
-                String ext = path.substring(extIndex).toLowerCase(Locale.ROOT);
-                return mimeMap.getMimeTypeFromExtension(ext);
-            }
+        String pathComponent = uri.getLastPathSegment();
+        if (pathComponent == null || pathComponent.isEmpty()) return null;
+
+        int extIndex = pathComponent.lastIndexOf('.') + 1;
+        if (extIndex > 0) {
+            MimeTypeMap mimeMap = MimeTypeMap.getSingleton();
+            String ext = pathComponent.substring(extIndex).toLowerCase(Locale.ROOT);
+            return mimeMap.getMimeTypeFromExtension(ext);
         }
         return null;
     }

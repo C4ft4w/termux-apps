@@ -13,7 +13,6 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.documentfile.provider.DocumentFile;
 
 import com.termux.app.TermuxConstants;
 
@@ -118,23 +117,20 @@ public class SAFAPI {
     }
 
     private static void manageDocumentTree(Context context, Intent intent) {
-        Intent i = new Intent(context, SAFActivity.class);
-        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        var i = new Intent(context, SAFActivity.class)
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ResultReturner.copyIntentExtras(intent, i);
         context.startActivity(i);
     }
 
     private static void writeDocument(Context context, Intent intent) {
-        String uri = intent.getStringExtra("uri");
-        if (uri == null) {
+        var uriString = intent.getStringExtra("uri");
+        if (uriString == null) {
             Log.e(LOG_TAG, "uri extra null");
             return;
         }
-        DocumentFile f = DocumentFile.fromSingleUri(context, Uri.parse(uri));
-        if (f == null) {
-            return;
-        }
-        writeDocumentFile(context, intent, f);
+        var uri = Uri.parse(uriString);
+        writeDocumentFile(context, intent, uri);
     }
 
     private static void createDocument(Context context, Intent intent) {
@@ -164,16 +160,13 @@ public class SAFAPI {
     }
 
     private static void readDocument(Context context, Intent intent) {
-        String uri = intent.getStringExtra("uri");
-        if (uri == null) {
+        var uriString = intent.getStringExtra("uri");
+        if (uriString == null) {
             Log.e(LOG_TAG, "uri extra null");
             return;
         }
-        DocumentFile f = DocumentFile.fromSingleUri(context, Uri.parse(uri));
-        if (f == null) {
-            return;
-        }
-        returnDocumentFile(context, intent, f);
+        var uri = Uri.parse(uriString);
+        returnDocumentFile(context, intent, uri);
     }
 
     private static void listDirectory(Context context, Intent intent) {
@@ -259,37 +252,53 @@ public class SAFAPI {
             }
             c.moveToNext();
             out.beginObject();
-            out.name("name");
-            out.value(c.getString(c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)));
-            out.name("type");
-            String mime = c.getString(c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE));
-            out.value(mime);
-            out.name("uri");
-            out.value(uri.toString());
-            if (!DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
-                out.name("length");
-                out.value(c.getInt(c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_SIZE)));
+
+            int index = c.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+            if (index >= 0) {
+                out.name("name").value(c.getString(index));
             }
+
+            index = c.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE);
+            String mime = null;
+            if (index >= 0) {
+                mime = c.getString(index);
+                out.name("type").value(mime);
+            }
+
+            out.name("uri").value(uri.toString());
+
+            index = c.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
+            if (index >= 0) {
+                out.name("last_modified").value(c.getLong(index));
+            }
+
+            if (!DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
+                index = c.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE);
+                if (index >= 0) {
+                    out.name("length").value(c.getInt(index));
+                }
+            }
+
             out.endObject();
         }
     }
 
-    private static void returnDocumentFile(Context context, Intent intent, DocumentFile f) {
+    private static void returnDocumentFile(Context context, Intent intent, Uri uri) {
         ResultReturner.returnData(intent, new ResultReturner.BinaryOutput() {
             @Override
             public void writeResult(OutputStream out) throws Exception {
-                try (InputStream in = context.getContentResolver().openInputStream(f.getUri())) {
+                try (InputStream in = context.getContentResolver().openInputStream(uri)) {
                     writeInputStreamToOutputStream(in, out);
                 }
             }
         });
     }
 
-    private static void writeDocumentFile(Context context, Intent intent, DocumentFile f) {
+    private static void writeDocumentFile(Context context, Intent intent, Uri uri) {
         ResultReturner.returnData(intent, new ResultReturner.WithInput() {
             @Override
             public void writeResult(PrintWriter unused) throws Exception {
-                try (OutputStream out = context.getContentResolver().openOutputStream(f.getUri(), "rwt")) {
+                try (OutputStream out = context.getContentResolver().openOutputStream(uri, "rwt")) {
                     writeInputStreamToOutputStream(in, out);
                 }
             }

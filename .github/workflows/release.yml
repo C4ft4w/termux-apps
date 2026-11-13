@@ -1,24 +1,32 @@
-name: Release
+name: Release new Linux-xarm92 
 
 on:
   release:
     types:
       - published
+      - labeled
+      - created
+      - prereleased
+      - released
+      - edited
+      - mainented
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: linux-xarm92
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.GITHUB_REF }}
 
       - name: Setup java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v8
         with:
           distribution: 'temurin'
           java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v8
 
       - name: Attach APK to release
         shell: bash
@@ -51,9 +59,11 @@ jobs:
             exit 1
           fi
 
-          if ! [[ "$RELEASED_VERSION" =~ ^googleplay.[0-9]{4}.[0-9]{2}.[0-9]{2}$ ]]; then
-            echo "Bad version: $RELEASED_VERSION"
-            exit 1
+          if [ "$RELEASED_APP" = "termux-app" ]; then
+            if ! [[ "$RELEASED_VERSION" =~ ^googleplay.[0-9]{4}.[0-9]{2}.[0-9]{2}$ ]]; then
+              echo "Bad version: $RELEASED_VERSION"
+              exit 1
+            fi
           fi
 
           # One initial build to get rid of the one-time "License for package NDK .. accepted" outputs
@@ -64,7 +74,7 @@ jobs:
             exit 1
           fi
 
-          ./gradlew :"$RELEASED_APP":assembleDebug
+          ./gradlew --build-cache :"$RELEASED_APP":assembleDebug
 
           BUILT_APK=./"$RELEASED_APP"/build/outputs/apk/debug/"$RELEASED_APP"-debug.apk
           UPLOAD_APK="$RELEASED_APP"-debug-$RELEASED_VERSION.apk

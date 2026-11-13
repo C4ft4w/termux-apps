@@ -21,6 +21,14 @@ public class TermuxPermissionUtils {
 
     public static final int REQUEST_DISABLE_BATTERY_OPTIMIZATIONS = 2001;
     public static final int REQUEST_POST_NOTIFICATIONS = 2002;
+    public static final int REQUEST_ACCESS_LOCAL_NETWORK = 2003;
+
+    /**
+     * See https://developer.android.com/privacy-and-security/local-network-permission
+     * Not yet part of {@link android.Manifest.permission} in all compile SDKs, so the
+     * literal string is used instead of a compile-time constant.
+     */
+    public static final String PERMISSION_ACCESS_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK";
 
     /**
      * Check which permissions that has not been granted.
@@ -29,7 +37,7 @@ public class TermuxPermissionUtils {
      * @param permissions The {@link String[]} names for permissions to check.
      * @return Returns the list of permissions not granted.
      */
-    public static List<String> checkNonGrantedPermissions(@NonNull Context context, @NonNull String ... permissions) {
+    public static ArrayList<String> checkNonGrantedPermissions(@NonNull Context context, @NonNull String ... permissions) {
         var result = new ArrayList<String>();
         for (String permission : permissions) {
             if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_DENIED) {
@@ -54,29 +62,21 @@ public class TermuxPermissionUtils {
     }
 
     /**
-     * Check if {@link Manifest.permission#REQUEST_IGNORE_BATTERY_OPTIMIZATIONS} permission has been
-     * granted.
-     *
-     * @param context The context for operations.
-     * @return Returns {@code true} if permission is granted, otherwise {@code false}.
+     * Asks the user to allow this app to ignore battery optimizations if necessary.
      */
-    public static boolean checkIfBatteryOptimizationsDisabled(@NonNull Context context) {
-        PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-        return powerManager.isIgnoringBatteryOptimizations(context.getPackageName());
-    }
-
     @SuppressLint("BatteryLife")
-    public static void requestDisableBatteryOptimizations(@NonNull Context context) {
-        var intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-        intent.setData(Uri.parse("package:" + context.getPackageName()));
-
-        // Flag must not be passed for activity contexts, otherwise onActivityResult() will not be called with permission grant result.
-        // Flag must be passed for non-activity contexts like services, otherwise "Calling startActivity() from outside of an Activity context requires the FLAG_ACTIVITY_NEW_TASK flag" exception will be raised.
-        if (!(context instanceof Activity)) {
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    public static void requestDisableBatteryOptimizationsIfNecessary(@NonNull Context context) {
+        var powerManager = context.getSystemService(PowerManager.class);
+        if (!powerManager.isIgnoringBatteryOptimizations(context.getPackageName())) {
+            var intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                .setData(Uri.parse("package:" + context.getPackageName()));
+            if (!(context instanceof Activity)) {
+                // Flag must not be passed for activity contexts, otherwise onActivityResult() will not be called with permission grant result.
+                // Flag must be passed for non-activity contexts like services, otherwise "Calling startActivity() from outside of an Activity context requires the FLAG_ACTIVITY_NEW_TASK flag" exception will be raised.
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            }
+            context.startActivity(intent);
         }
-
-        context.startActivity(intent);
     }
 
 }

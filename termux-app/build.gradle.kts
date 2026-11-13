@@ -1,4 +1,4 @@
-import com.android.build.gradle.internal.tasks.factory.dependsOn
+import org.gradle.api.internal.file.FileOperations
 import java.io.BufferedOutputStream
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -13,38 +13,21 @@ plugins {
 android {
     namespace = "com.termux"
 
-    val ndkVersion: String by project
+    val ndkVersion = project.property("ndkVersion") as String
     this.ndkVersion = ndkVersion
 
-    dependencies {
-        implementation("androidx.annotation:annotation:1.9.1")
-        implementation("androidx.core:core:1.16.0")
-        implementation("androidx.drawerlayout:drawerlayout:1.2.0")
-        implementation("androidx.viewpager:viewpager:1.1.0")
-        implementation("com.google.android.material:material:1.12.0")
-
-        implementation(project(":terminal-view"))
-    }
-
     defaultConfig {
-        versionCode = 137
-        versionName = "googleplay.2025.01.18"
+        versionCode = 142
+        versionName = "googleplay.2026.10.09"
 
-        val minSdkVersion: String by project
-        val targetSdkVersion: String by project
-        val compileSdkVersion: String by project
+        val minSdkVersion = project.property("minSdkVersion") as String
+        val targetSdkVersion = project.property("targetSdkVersion") as String
+        val compileSdkVersion = project.property("compileSdkVersion") as String
         minSdk = minSdkVersion.toInt()
         targetSdk = targetSdkVersion.toInt()
         compileSdk = compileSdkVersion.toInt()
-
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
-        }
-
-        externalNativeBuild {
-            ndkBuild {
-                cFlags += listOf("-std=c11", "-Wall", "-Wextra", "-Werror", "-Os", "-fno-stack-protector", "-Wl,--gc-sections")
-            }
         }
     }
 
@@ -61,7 +44,7 @@ android {
          getByName("release") {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
 
         getByName("debug") {
@@ -74,8 +57,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     externalNativeBuild {
@@ -102,100 +85,110 @@ android {
 }
 
 dependencies {
+    implementation("androidx.annotation:annotation:1.11.0")
+    implementation("androidx.core:core:1.19.1")
+    implementation("androidx.drawerlayout:drawerlayout:1.2.0")
+    implementation("androidx.viewpager:viewpager:1.1.0")
+    implementation("com.google.android.material:material:1.14.0")
+    implementation(project(":terminal-view"))
+
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("org.robolectric:robolectric:4.17")
 }
 
 tasks.register("versionName") {
+    val versionName = android.defaultConfig.versionName
     doLast {
-        print(android.defaultConfig.versionName)
+        print(versionName)
     }
 }
 
-fun downloadFile(localUrl: String, remoteUrl: String, expectedChecksum: String) {
-    val digest = MessageDigest.getInstance("SHA-256")
+abstract class CleanBootstrapsTask : DefaultTask() {
+    @get:InputDirectory abstract val projectDir: DirectoryProperty
+    @get:Inject abstract val fileOperations: FileOperations
 
-    val file = File(projectDir, localUrl)
-    if (file.exists()) {
-        val buffer = ByteArray(8192)
-        val input = FileInputStream(file)
-        while (true) {
-            val readBytes = input.read(buffer)
-            if (readBytes < 0) break
-            digest.update(buffer, 0, readBytes)
-        }
-        var checksum = BigInteger(1, digest.digest()).toString(16)
-        while (checksum.length < 64) { checksum = "0$checksum" }
-        if (checksum == expectedChecksum) {
-            return
-        } else {
-            logger.warn("Deleting old local file with wrong hash: $localUrl: expected: $expectedChecksum, actual: $checksum")
-            file.delete()
-        }
-    }
-
-    logger.quiet("Downloading $remoteUrl ...")
-
-    file.parentFile.mkdirs()
-    val out = BufferedOutputStream(FileOutputStream(file))
-
-    val connection = URI(remoteUrl).toURL().openConnection()
-    val digestStream = DigestInputStream(connection.inputStream, digest)
-    digestStream.transferTo(out)
-    out.close()
-
-    var checksum = BigInteger(1, digest.digest()).toString(16)
-    while (checksum.length < 64) { checksum = "0$checksum" }
-    if (checksum != expectedChecksum) {
-        file.delete()
-        throw GradleException("Wrong checksum for $remoteUrl:\n Expected: $expectedChecksum\n Actual:   $checksum")
+    @TaskAction
+    fun action() {
+        val tree = fileOperations.fileTree(File(projectDir.asFile.get(), "src/main/cpp"))
+        tree.include("**/bootstrap-*.zip")
+        tree.include("**/libproot-*.so")
+        tree.forEach { it.delete() }
     }
 }
 
-tasks {
-    getByName<Delete>("clean") {
-        doLast {
-            val tree = fileTree(File(projectDir, "src/main/cpp"))
-            tree.include("bootstrap-*.zip")
-            tree.forEach { it.delete() }
-        }
-    }
+tasks.register<CleanBootstrapsTask>("cleanBootstraps") {
+    projectDir = layout.projectDirectory
+}
+
+tasks.named("clean") {
+    dependsOn("cleanBootstraps")
 }
 
 tasks.register("downloadPrebuilt") {
+    fun downloadFile(projectDir: Directory, localUrl: String, remoteUrl: String, expectedChecksum: String) {
+        val digest = MessageDigest.getInstance("SHA-256")
+
+        val file = File(projectDir.asFile, localUrl)
+        if (file.exists()) {
+            val buffer = ByteArray(8192)
+            val input = FileInputStream(file)
+            while (true) {
+                val readBytes = input.read(buffer)
+                if (readBytes < 0) break
+                digest.update(buffer, 0, readBytes)
+            }
+            var checksum = BigInteger(1, digest.digest()).toString(16)
+            while (checksum.length < 64) { checksum = "0$checksum" }
+            if (checksum == expectedChecksum) {
+                return
+            } else {
+                logger.warn("Deleting old local file with wrong hash: $localUrl: expected: $expectedChecksum, actual: $checksum")
+                file.delete()
+            }
+        }
+
+        logger.quiet("Downloading $remoteUrl ...")
+
+        file.parentFile.mkdirs()
+        val out = BufferedOutputStream(FileOutputStream(file))
+
+        val connection = URI(remoteUrl).toURL().openConnection()
+        val digestStream = DigestInputStream(connection.inputStream, digest)
+        digestStream.transferTo(out)
+        out.close()
+
+        var checksum = BigInteger(1, digest.digest()).toString(16)
+        while (checksum.length < 64) { checksum = "0$checksum" }
+        if (checksum != expectedChecksum) {
+            file.delete()
+            throw GradleException("Wrong checksum for $remoteUrl:\n Expected: $expectedChecksum\n Actual:   $checksum")
+        }
+    }
+
+    val projectDir = layout.projectDirectory
+
     doLast {
-        val bootstrapVersion = "2025.01.18-r1"
+        val bootstrapVersion = "2026.10.04-r1"
         val arches = mapOf(
-            "aarch64" to "ce08316c5ab0610551c6b4a2c0d256073c0f47ec5d72a94f3895e3bd911f7aff",
-            "arm" to "ee54ef84c34da2084d388ee4132de357f8d514467339b69d56d78bbab0d0eb04",
-            "x86_64" to "dfc6d9d7e5b8dee126ab95a8fc528b53e4044588c3f5eacf428fe1e0aa0bf4e3"
+            "aarch64" to "75a71ea34d5a0acef2cf15849b31b11d5c293fc34df5c74f4f905438202dad0d",
+            "arm" to "2e053f50d36b01d00c330b509001fd630661a44a54998db503311033147d4ac6",
+            "x86_64" to "3a2cd78d8546dad406a52b0458299b625ab059174503c70b4cd1c7093ae6069e"
         )
         arches.forEach { (arch, checksum) ->
             val downloadTo = "src/main/cpp/bootstrap-${arch}.zip"
             val url = "https://github.com/termux-play-store/termux-packages/releases/download/bootstrap-${bootstrapVersion}/bootstrap-${arch}.zip"
-            downloadFile(downloadTo, url, checksum)
+            downloadFile(projectDir, downloadTo, url, checksum)
         }
 
-        val prootTag = "proot-2025.01.15-r2"
-        val prootVersion = "5.1.107-66"
+        val prootTag = "proot-2026.06.21-r1"
+        val prootVersion = "5.1.107.80-0"
         var prootUrl = "https://github.com/termux-play-store/termux-packages/releases/download/${prootTag}/libproot-loader-ARCH-${prootVersion}.so"
-        downloadFile("src/main/jniLibs/armeabi-v7a/libproot-loader.so", prootUrl.replace("ARCH", "arm"), "eb1d64e9ef875039534ce7a8eeffa61bbc4c0ae5722cb48c9112816b43646a3e")
-        downloadFile("src/main/jniLibs/arm64-v8a/libproot-loader.so", prootUrl.replace("ARCH", "aarch64"), "8814b72f760cd26afe5350a1468cabb6622b4871064947733fcd9cd06f1c8cb8")
-        downloadFile("src/main/jniLibs/x86_64/libproot-loader.so", prootUrl.replace("ARCH", "x86_64"), "1a52cc9cc5fdecbf4235659ffeac8c51e4fefd7c75cc205f52d4884a3a0a0ba1")
-        prootUrl = "https://github.com/termux-play-store/termux-packages/releases/download/${prootTag}/libproot-loader32-ARCH-${prootVersion}.so"
-        downloadFile("src/main/jniLibs/arm64-v8a/libproot-loader32.so", prootUrl.replace("ARCH", "aarch64"), "ff56a5e3a37104f6778420d912e3edf31395c15d1528d28f0eb7d13a64481b99")
-        downloadFile("src/main/jniLibs/x86_64/libproot-loader32.so", prootUrl.replace("ARCH", "x86_64"), "5460a597e473f57f0d33405891e35ca24709173ca0a38805d395e3544ab8b1b4")
+        downloadFile(projectDir, "src/main/jniLibs/armeabi-v7a/libproot-loader.so", prootUrl.replace("ARCH", "arm"), "09729047155df0c1a6b55c265ff4e272107775961d7efaff06bdd7cf37904050")
+        downloadFile(projectDir, "src/main/jniLibs/arm64-v8a/libproot-loader.so", prootUrl.replace("ARCH", "aarch64"), "f7e3211e4c210c2a39a1f22b7f38666d99aee172fd009c0d19b84108cf20bb42")
+        downloadFile(projectDir, "src/main/jniLibs/x86_64/libproot-loader.so", prootUrl.replace("ARCH", "x86_64"), "86e22d456255417e1d4ee874986571578ff26675ae2e372458e0d87f26454c63")
     }
 }
 
-afterEvaluate {
-    android.applicationVariants.all { variant ->
-        variant.javaCompileProvider.dependsOn("downloadPrebuilt")
-        true
-    }
-}
-
-// https://stackoverflow.com/questions/75274720/a-failure-occurred-while-executing-appcheckdebugduplicateclasses/
-configurations.implementation {
-   exclude("org.jetbrains.kotlin", "kotlin-stdlib-jdk8")
+tasks.named("preBuild") {
+    dependsOn("downloadPrebuilt")
 }

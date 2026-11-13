@@ -1,4 +1,4 @@
-package com.termux.api.apis;
+package com.termux.app.api;
 
 import android.app.Service;
 import android.content.Context;
@@ -8,10 +8,9 @@ import android.os.IBinder;
 import android.os.PowerManager;
 import android.util.Log;
 
-import com.termux.api.util.ResultReturner;
-
 import java.io.File;
 import java.io.IOException;
+import java.util.Locale;
 
 /**
  * API that enables playback of standard audio formats such as:
@@ -21,16 +20,10 @@ public class MediaPlayerAPI {
 
     private static final String LOG_TAG = "MediaPlayerAPI";
 
-    /**
-     * Starts our MediaPlayerService
-     */
     public static void onReceive(final Context context, final Intent intent) {
-        // Create intent for starting our player service and make sure
-        // we retain all relevant info from this intent
-        Intent playerService = new Intent(context, MediaPlayerService.class);
-        playerService.setAction(intent.getAction());
-        playerService.putExtras(intent.getExtras());
-
+        var playerService = new Intent(context, MediaPlayerService.class)
+            .setAction(intent.getAction())
+            .putExtras(intent.getExtras());
         context.startService(playerService);
     }
 
@@ -47,9 +40,9 @@ public class MediaPlayerAPI {
 
         // only show hours if we have them
         if (hours > 0) {
-            result += String.format("%02d:", hours);
+            result += String.format(Locale.ENGLISH, "%02d:", hours);
         }
-        result += String.format("%02d:%02d", mins, secs);
+        result += String.format(Locale.ENGLISH, "%02d:%02d", mins, secs);
         return result;
     }
 
@@ -83,9 +76,6 @@ public class MediaPlayerAPI {
             return mediaPlayer;
         }
 
-        /**
-         * What we received from TermuxApiReceiver but now within this service
-         */
         public int onStartCommand(Intent intent, int flags, int startId) {
             String command = intent.getAction();
             MediaPlayer player = getMediaPlayer();
@@ -133,33 +123,24 @@ public class MediaPlayerAPI {
         }
 
         protected static MediaCommandHandler getMediaCommandHandler(final String command) {
-            switch (command == null ? "" : command) {
-                case "info":
-                    return infoHandler;
-                case "play":
-                    return playHandler;
-                case "pause":
-                    return pauseHandler;
-                case "resume":
-                    return resumeHandler;
-                case "stop":
-                    return stopHandler;
-                default:
-                    return (player, context, intent) -> {
-                        MediaCommandResult result = new MediaCommandResult();
-                        result.error = "Unknown command: " + command;
-                        return result;
-                    };
-            }
+            return switch (command) {
+                case "info" -> infoHandler;
+                case "play" -> playHandler;
+                case "pause" -> pauseHandler;
+                case "resume" -> resumeHandler;
+                case "stop" -> stopHandler;
+                case null, default -> (player, context, intent) -> {
+                    MediaCommandResult result = new MediaCommandResult();
+                    result.error = "Unknown command: " + command;
+                    return result;
+                };
+            };
         }
 
-        /**
-         * Returns result of executing a media command to termux
-         */
-        protected static void postMediaCommandResult(final Context context, final Intent intent,
+        protected static void postMediaCommandResult(final Context context,
+                                                     final Intent intent,
                                                      final MediaCommandResult result) {
-
-            ResultReturner.returnData(context, intent, out -> {
+            ResultReturner.returnData(intent, out -> {
                 out.append(result.message).append("\n");
                 if (result.error != null) {
                     out.append(result.error).append("\n");
@@ -169,12 +150,6 @@ public class MediaPlayerAPI {
             });
         }
 
-        /**
-         * -----
-         * Media Command Handlers
-         * -----
-         */
-
         static final MediaCommandHandler infoHandler = new MediaCommandHandler() {
             @Override
             public MediaCommandResult handle(MediaPlayer player, Context context, Intent intent) {
@@ -182,7 +157,7 @@ public class MediaPlayerAPI {
 
                 if (hasTrack) {
                     String status = player.isPlaying() ? "Playing" : "Paused";
-                    result.message = String.format("Status: %s\nTrack: %s\nCurrent Position: %s", status, trackName, getPlaybackPositionString(player));
+                    result.message = String.format(Locale.ENGLISH, "Status: %s\nTrack: %s\nCurrent Position: %s", status, trackName, getPlaybackPositionString(player));
                 } else {
                     result.message = "No track currently!";
                 }
@@ -198,6 +173,7 @@ public class MediaPlayerAPI {
                 File mediaFile;
                 try {
                     mediaFile = new File(intent.getStringExtra("file"));
+                    Log.e("termux", "PLAYING FILE: " + mediaFile.getAbsolutePath());
                 } catch (NullPointerException e) {
                     result.error = "No file was specified";
                     return result;

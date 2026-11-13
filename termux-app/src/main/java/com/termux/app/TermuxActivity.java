@@ -80,7 +80,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_STYLING_ID = 7;
     private static final int CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON = 8;
     private static final int CONTEXT_MENU_FULLSCREEN_ID = 9;
-    private static final int CONTEXT_MENU_HELP_ID = 10;
 
     private static final String ARG_TERMINAL_TOOLBAR_TEXT_INPUT = "terminal_toolbar_text_input";
     private static final String ARG_ACTIVITY_RECREATED = "activity_recreated";
@@ -325,6 +324,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             TermuxPermissionUtils.requestPermissions(this,
                 TermuxPermissionUtils.REQUEST_POST_NOTIFICATIONS,
                 Manifest.permission.POST_NOTIFICATIONS
+            );
+        }
+
+        // Starting with Android 17, apps targeting SDK 37+ have local network access
+        // (e.g. ping, ssh to LAN devices) blocked unless this runtime permission is granted.
+        // See https://developer.android.com/privacy-and-security/local-network-permission
+        if (Build.VERSION.SDK_INT >= 37) {
+            TermuxPermissionUtils.requestPermissions(this,
+                TermuxPermissionUtils.REQUEST_ACCESS_LOCAL_NETWORK,
+                TermuxPermissionUtils.PERMISSION_ACCESS_LOCAL_NETWORK
             );
         }
     }
@@ -572,7 +581,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         menu.add(Menu.NONE, CONTEXT_MENU_STYLING_ID, Menu.NONE, R.string.action_style_terminal);
         menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on).setCheckable(true).setChecked(mTerminalView.getKeepScreenOn());
         menu.add(Menu.NONE, CONTEXT_MENU_FULLSCREEN_ID, Menu.NONE, R.string.action_fullscreen).setCheckable(true).setChecked(mPreferences.isFullscreen());
-        menu.add(Menu.NONE, CONTEXT_MENU_HELP_ID, Menu.NONE, R.string.action_open_help);
     }
 
     /**
@@ -622,9 +630,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             case CONTEXT_MENU_FULLSCREEN_ID:
                 mPreferences.toggleFullscreen();
                 applyFullscreenSetting(mPreferences.isFullscreen());
-                return true;
-            case CONTEXT_MENU_HELP_ID:
-                startActivity(new Intent(this, TermuxHelpActivity.class));
                 return true;
             default:
                 return super.onContextItemSelected(item);

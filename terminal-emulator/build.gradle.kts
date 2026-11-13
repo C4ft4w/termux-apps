@@ -5,21 +5,14 @@ plugins {
 android {
     namespace = "com.termux.emulator"
 
-    val ndkVersion: String by project
+    val ndkVersion = project.property("ndkVersion") as String
     this.ndkVersion = ndkVersion
 
     defaultConfig {
-        val minSdkVersion: String by project
-        val compileSdkVersion: String by project
+        val minSdkVersion = project.property("minSdkVersion") as String
+        val compileSdkVersion = project.property("compileSdkVersion") as String
         minSdk = minSdkVersion.toInt()
         compileSdk = compileSdkVersion.toInt()
-
-        externalNativeBuild {
-            ndkBuild {
-                cFlags += listOf("-std=c11", "-Wall", "-Wextra", "-Werror", "-Os", "-fno-stack-protector", "-Wl,--gc-sections")
-            }
-        }
-
         ndk {
             abiFilters += listOf("x86", "x86_64", "armeabi-v7a", "arm64-v8a")
         }
@@ -28,7 +21,7 @@ android {
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
@@ -39,12 +32,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
 dependencies {
-    implementation("androidx.annotation:annotation:1.9.1")
+    implementation("androidx.annotation:annotation:1.11.0")
     testImplementation("junit:junit:4.13.2")
 }

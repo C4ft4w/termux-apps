@@ -9,9 +9,9 @@ android {
         versionCode = 7
         versionName = "0.$versionCode"
 
-        val minSdkVersion: String by project
-        val targetSdkVersion: String by project
-        val compileSdkVersion: String by project
+        val minSdkVersion = project.property("minSdkVersion") as String
+        val targetSdkVersion = project.property("targetSdkVersion") as String
+        val compileSdkVersion = project.property("compileSdkVersion") as String
         minSdk = minSdkVersion.toInt()
         targetSdk = targetSdkVersion.toInt()
         compileSdk = compileSdkVersion.toInt()
@@ -34,7 +34,7 @@ android {
         getByName("release") {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
 
         getByName("debug") {
@@ -43,24 +43,25 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
 dependencies {
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("androidx.annotation:annotation:1.9.1")
-    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.8.0")
+    implementation("androidx.annotation:annotation:1.11.0")
+    implementation("com.google.android.material:material:1.14.0")
 
     testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test:runner:1.5.2")
-    androidTestImplementation("androidx.test:rules:1.5.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:rules:1.7.0")
 }
 
-task("versionName") {
+tasks.register("versionName") {
+    val versionName = android.defaultConfig.versionName
     doLast {
-        print(android.defaultConfig.versionName)
+        print(versionName)
     }
 }
